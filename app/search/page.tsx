@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useRef } from "react"
-import { Search, Sparkles, ChefHat, Clock, Users, Plus, Upload, CloverIcon as CloseIcon } from "lucide-react"
+import { Search, Sparkles, ChefHat, Clock, Users, Plus, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -15,9 +15,8 @@ export default function IngredientSearchPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [showResults, setShowResults] = useState(false)
   const [selectedDiets, setSelectedDiets] = useState<string[]>([])
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const dietaryPreferences = [
@@ -30,37 +29,44 @@ export default function IngredientSearchPage() {
   const recipes = [
     {
       id: 1,
-      title: "Creamy Tomato Garlic Chicken",
-      description:
-        "A rich and flavorful dish with tender chicken in a creamy tomato sauce infused with garlic. Perfect for dinner!",
+      title: "地中海柠檬烤鸡胸",
+      description: "新鲜健康的烤鸡胸配柠檬和香草,清爽不油腻",
       image: "/creamy-tomato-garlic-chicken-dish.jpg",
       cookTime: "30 min",
       servings: "4",
       matchScore: 95,
+      ingredients: ["鸡胸肉", "柠檬", "橄榄油", "迷迭香"],
     },
     {
       id: 2,
-      title: "Mediterranean Chicken Bowl",
-      description: "Fresh and healthy bowl with grilled chicken, tomatoes, and aromatic garlic. Light yet satisfying!",
+      title: "蒜香番茄炖鸡",
+      description: "浓郁的番茄酱汁配上嫩滑的鸡肉和大蒜,家常美味",
       image: "/mediterranean-chicken-bowl-with-tomatoes.jpg",
       cookTime: "25 min",
       servings: "2",
       matchScore: 88,
+      ingredients: ["鸡腿肉", "番茄", "大蒜", "洋葱"],
     },
     {
       id: 3,
-      title: "Garlic Butter Chicken Skillet",
-      description:
-        "Quick one-pan wonder with juicy chicken, cherry tomatoes, and loads of garlic butter. Comfort food at its best!",
+      title: "黄油蒜香煎鸡排",
+      description: "快手一锅料理,香煎鸡排配樱桃番茄和黄油蒜香",
       image: "/garlic-butter-chicken-skillet-with-tomatoes.jpg",
       cookTime: "20 min",
       servings: "3",
       matchScore: 92,
+      ingredients: ["鸡排", "樱桃番茄", "黄油", "大蒜"],
     },
   ]
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (searchQuery.trim()) {
+      setIsSearching(true)
+
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+
+      setIsSearching(false)
       setShowResults(true)
     }
   }
@@ -69,43 +75,29 @@ export default function IngredientSearchPage() {
     setSelectedDiets((prev) => (prev.includes(dietId) ? prev.filter((id) => id !== dietId) : [...prev, dietId]))
   }
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setUploadedImage(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+      setIsUploadingImage(true)
+
+      // Simulate AI processing delay
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      // Simulated AI ingredient detection in Chinese
+      const detectedIngredients = ["西兰花", "三文鱼", "柠檬", "大蒜", "番茄"]
+
+      // Add detected ingredients to search query
+      const currentIngredients = searchQuery ? searchQuery.split(",").map((i) => i.trim()) : []
+      const newIngredients = detectedIngredients.filter((ing) => !currentIngredients.includes(ing))
+      const updatedQuery = [...currentIngredients, ...newIngredients].join(", ")
+
+      setSearchQuery(updatedQuery)
+      setIsUploadingImage(false)
     }
   }
 
-  const processImageWithAI = async () => {
-    if (!uploadedImage) return
-
-    setIsProcessing(true)
-
-    // Simulate AI processing delay
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    // Simulated AI ingredient detection
-    const detectedIngredients = ["tomato", "chicken", "garlic", "onion", "bell pepper"]
-
-    // Add detected ingredients to search query
-    const currentIngredients = searchQuery ? searchQuery.split(",").map((i) => i.trim()) : []
-    const newIngredients = detectedIngredients.filter((ing) => !currentIngredients.includes(ing))
-    const updatedQuery = [...currentIngredients, ...newIngredients].join(", ")
-
-    setSearchQuery(updatedQuery)
-    setIsProcessing(false)
-    setShowUploadModal(false)
-    setUploadedImage(null)
-  }
-
-  const closeUploadModal = () => {
-    setShowUploadModal(false)
-    setUploadedImage(null)
-    setIsProcessing(false)
+  const handlePlusClick = () => {
+    fileInputRef.current?.click()
   }
 
   return (
@@ -141,20 +133,38 @@ export default function IngredientSearchPage() {
                   className="pl-14 pr-16 py-7 text-lg rounded-full border-2 border-border focus:border-primary transition-all duration-300 shadow-lg hover:shadow-xl"
                 />
                 <button
-                  onClick={() => setShowUploadModal(true)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-md"
+                  onClick={handlePlusClick}
+                  disabled={isUploadingImage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Upload ingredient image"
                 >
-                  <Plus className="w-5 h-5" />
+                  {isUploadingImage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
                 </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
               </div>
               <Button
                 onClick={handleSearch}
+                disabled={isSearching}
                 size="lg"
-                className="mt-4 rounded-full px-8 py-6 text-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                className="mt-4 rounded-full px-8 py-6 text-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ChefHat className="w-5 h-5 mr-2" />
-                Find Recipes
+                {isSearching ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    寻找灵感中...
+                  </>
+                ) : (
+                  <>
+                    <ChefHat className="w-5 h-5 mr-2" />
+                    Find Recipes
+                  </>
+                )}
               </Button>
             </div>
 
@@ -185,7 +195,7 @@ export default function IngredientSearchPage() {
           <section className="px-4 py-16 bg-background">
             <div className="max-w-7xl mx-auto">
               <div className="text-center mb-12">
-                <h2 className="text-3xl md:text-4xl font-bold mb-3 animate-fade-in-up">Your Perfect Matches 🎯</h2>
+                <h2 className="text-3xl md:text-4xl font-bold mb-3 animate-fade-in-up">为你精心推荐</h2>
                 <p className="text-muted-foreground text-lg animate-fade-in-up animate-delay-100">
                   We found {recipes.length} amazing recipes based on your ingredients
                 </p>
@@ -215,6 +225,18 @@ export default function IngredientSearchPage() {
                       </h3>
 
                       <p className="text-muted-foreground text-sm mb-4 leading-relaxed">{recipe.description}</p>
+
+                      <div className="mb-4">
+                        <p className="text-sm font-semibold mb-2">主要食材:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          {recipe.ingredients.map((ingredient, idx) => (
+                            <li key={idx} className="flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                              {ingredient}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
 
                       <div className="flex items-center gap-4 mb-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
@@ -274,81 +296,6 @@ export default function IngredientSearchPage() {
       </main>
 
       <Footer />
-
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-background rounded-3xl max-w-lg w-full p-8 shadow-2xl animate-scale-in">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold">Upload Ingredient Photo</h3>
-              <button
-                onClick={closeUploadModal}
-                className="w-8 h-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
-                aria-label="Close modal"
-              >
-                <CloseIcon className="w-5 h-5" />
-              </button>
-            </div>
-
-            {!uploadedImage ? (
-              <div className="space-y-4">
-                <p className="text-muted-foreground">
-                  Take a photo of your ingredients and our AI will automatically identify them for you
-                </p>
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-border rounded-2xl p-12 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all duration-300"
-                >
-                  <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="font-semibold mb-2">Click to upload image</p>
-                  <p className="text-sm text-muted-foreground">PNG, JPG up to 10MB</p>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="relative rounded-2xl overflow-hidden">
-                  <img
-                    src={uploadedImage || "/placeholder.svg"}
-                    alt="Uploaded ingredients"
-                    className="w-full h-64 object-cover"
-                  />
-                </div>
-                <Button
-                  onClick={processImageWithAI}
-                  disabled={isProcessing}
-                  className="w-full rounded-full py-6 text-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Sparkles className="w-5 h-5 mr-2 animate-spin" />
-                      Analyzing ingredients...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5 mr-2" />
-                      Detect Ingredients
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={() => setUploadedImage(null)}
-                  variant="outline"
-                  className="w-full rounded-full"
-                  disabled={isProcessing}
-                >
-                  Choose Different Image
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

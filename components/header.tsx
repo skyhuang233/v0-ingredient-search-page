@@ -11,7 +11,7 @@ export default function Header() {
     <header className="nav is-inverse">
       <div className="nav_container">
         <div className="nav_left">
-          <Link href="/" className="nav_logo">
+          <a href="https://nutrigenius-367f75.webflow.io/" className="nav_logo">
             <div className="nav_logo-icon">
               <svg width="100%" height="100%" viewBox="0 0 33 33" preserveAspectRatio="xMidYMid meet">
                 <path
@@ -21,7 +21,7 @@ export default function Header() {
               </svg>
             </div>
             <div className="nav_brand-name">Nutrigenius</div>
-          </Link>
+          </a>
 
           <nav className="nav_menu">
             <ul className="nav_menu-list">
