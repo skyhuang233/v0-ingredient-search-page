@@ -44,12 +44,9 @@ export default function Header() {
                 </Link>
               </li>
               <li className="nav_menu-list-item">
-                <div className="nav_dropdown-menu">
-                  <button className="nav_link on-inverse">
-                    <div>Help</div>
-                    <ChevronDown className="nav-caret" size={16} />
-                  </button>
-                </div>
+                <Link href="/contact" className="nav_link on-inverse">
+                  <div>Help</div>
+                </Link>
               </li>
             </ul>
           </nav>
@@ -57,7 +54,7 @@ export default function Header() {
 
         <div className="nav_right">
           <div className="button-group">
-            <Link href="/search" className="button on-inverse">
+            <Link href="/health/profile" className="button on-inverse">
               <div className="button_label">Get started</div>
             </Link>
           </div>
@@ -84,10 +81,10 @@ export default function Header() {
             <Link href="#" className="nav_mobile-link" onClick={() => setMobileMenuOpen(false)}>
               Inspiration
             </Link>
-            <Link href="#" className="nav_mobile-link" onClick={() => setMobileMenuOpen(false)}>
+            <Link href="/contact" className="nav_mobile-link" onClick={() => setMobileMenuOpen(false)}>
               Help
             </Link>
-            <Link href="/search" className="button on-inverse mobile" onClick={() => setMobileMenuOpen(false)}>
+            <Link href="/health/profile" className="button on-inverse mobile" onClick={() => setMobileMenuOpen(false)}>
               <div className="button_label">Get started</div>
             </Link>
           </nav>
