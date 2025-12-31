@@ -3,13 +3,14 @@
 import type React from "react"
 import Link from "next/link"
 import { useState, useRef } from "react"
-import { Search, Sparkles, ChefHat, Clock, Users, Plus, Loader2 } from "lucide-react"
+import { Search, Sparkles, ChefHat, Clock, Users, Plus, Loader2, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
+import { useChatContext } from "@/components/chat-context"
 
 interface RecommendedRecipe {
   recipe_id: number
@@ -18,6 +19,7 @@ interface RecommendedRecipe {
   ingredients: string[]
   steps: string[]
   description: string
+  reasoning?: string
 }
 
 function toSentenceCase(text: string) {
@@ -25,6 +27,7 @@ function toSentenceCase(text: string) {
 }
 
 export default function IngredientSearchPage() {
+  const { setActiveContext, setIsChatOpen } = useChatContext()
   const [searchQuery, setSearchQuery] = useState("")
   const [showResults, setShowResults] = useState(false)
   const [selectedDiets, setSelectedDiets] = useState<string[]>([])
@@ -32,6 +35,7 @@ export default function IngredientSearchPage() {
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [results, setResults] = useState<RecommendedRecipe[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [nutritionistNote, setNutritionistNote] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const dietaryPreferences = [
@@ -46,6 +50,7 @@ export default function IngredientSearchPage() {
 
     setIsSearching(true)
     setErrorMessage(null)
+    setNutritionistNote(null)
 
     const ingredients = searchQuery
       .split(",")
@@ -62,7 +67,7 @@ export default function IngredientSearchPage() {
       const response = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ingredients, userId: 0, topk: 3 }),
+        body: JSON.stringify({ ingredients, userId: 1, topk: 3 }), // Hardcoded ID for demonstration if no auth context
       })
 
       if (!response.ok) {
@@ -70,8 +75,9 @@ export default function IngredientSearchPage() {
         throw new Error(data.error ?? "Failed to fetch recommendations")
       }
 
-      const data = (await response.json()) as { results: RecommendedRecipe[] }
+      const data = (await response.json()) as { results: RecommendedRecipe[]; nutritionist_note?: string }
       setResults(data.results ?? [])
+      setNutritionistNote(data.nutritionist_note ?? null)
       setShowResults((data.results ?? []).length > 0)
     } catch (error) {
       console.error("Search error", error)
@@ -195,9 +201,8 @@ export default function IngredientSearchPage() {
                 <Badge
                   key={diet.id}
                   variant={selectedDiets.includes(diet.id) ? "default" : "outline"}
-                  className={`px-4 py-2 rounded-full cursor-pointer transition-all duration-300 hover:scale-105 ${
-                    selectedDiets.includes(diet.id) ? "bg-secondary text-secondary-foreground shadow-md" : "hover:bg-muted"
-                  }`}
+                  className={`px-4 py-2 rounded-full cursor-pointer transition-all duration-300 hover:scale-105 ${selectedDiets.includes(diet.id) ? "bg-secondary text-secondary-foreground shadow-md" : "hover:bg-muted"
+                    }`}
                   onClick={() => toggleDiet(diet.id)}
                 >
                   <span className="mr-1">{diet.emoji}</span>
@@ -215,9 +220,23 @@ export default function IngredientSearchPage() {
             <div className="max-w-7xl mx-auto">
               <div className="text-center mb-12">
                 <h2 className="text-3xl md:text-4xl font-bold mb-3 animate-fade-in-up">为你精心推荐</h2>
-                <p className="text-muted-foreground text-lg animate-fade-in-up animate-delay-100">
-                  We found {results.length} amazing recipes based on your ingredients
-                </p>
+
+                {nutritionistNote ? (
+                  <div className="max-w-2xl mx-auto mt-4 p-4 rounded-xl bg-primary/5 border border-primary/20 animate-fade-in-up">
+                    <div className="flex items-start gap-3">
+                      <Sparkles className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                      <div className="text-left">
+                        <p className="font-semibold text-primary mb-1">Nutritionist's Insight</p>
+                        <p className="text-muted-foreground text-sm leading-relaxed">{nutritionistNote}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-lg animate-fade-in-up animate-delay-100">
+                    We found {results.length} amazing recipes based on your ingredients
+                  </p>
+                )}
+
               </div>
 
               <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3 items-start">
@@ -238,6 +257,14 @@ export default function IngredientSearchPage() {
                         <p className="text-base text-muted-foreground leading-relaxed">
                           {toSentenceCase(recipe.description)}
                         </p>
+
+                        {recipe.reasoning && (
+                          <div className="text-sm bg-secondary/50 p-3 rounded-lg border border-secondary/20">
+                            <span className="font-semibold text-xs uppercase tracking-wider text-muted-foreground opacity-70">Why this fits:</span>
+                            <p className="mt-1 text-secondary-foreground/90">{recipe.reasoning}</p>
+                          </div>
+                        )}
+
                       </div>
 
                       <div className="space-y-3">
@@ -254,8 +281,8 @@ export default function IngredientSearchPage() {
                         </div>
                       </div>
 
-                      <div className="pt-2">
-                        <Link href={`/recipe/${recipe.recipe_id}`}>
+                      <div className="pt-2 flex gap-2">
+                        <Link href={`/recipe/${recipe.recipe_id}`} className="flex-1">
                           <Button
                             size="lg"
                             className="w-full rounded-full font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-300 hover:-translate-y-0.5 shadow-md hover:shadow-lg"
@@ -263,6 +290,22 @@ export default function IngredientSearchPage() {
                             View Recipe
                           </Button>
                         </Link>
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          className="rounded-full w-12 h-12 p-0 shrink-0 border-primary/20 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary/50"
+                          onClick={() => {
+                            setActiveContext({
+                              id: recipe.recipe_id,
+                              name: recipe.name,
+                              ingredients: recipe.ingredients
+                            })
+                            setIsChatOpen(true)
+                          }}
+                          title="Speak to Chef about this recipe"
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>

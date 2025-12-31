@@ -66,36 +66,14 @@ export async function POST(request: NextRequest) {
       allergies: allergies || []
     }
 
-    // 检查是否已存在档案
-    const { data: existing } = await supabaseAdmin
+    // 使用 upsert 自动处理新建或更新，避免并发冲突
+    const { data: result, error } = await supabaseAdmin
       .from('user_health_profiles')
-      .select('id')
-      .eq('user_id', userId)
+      .upsert(profileData, { onConflict: 'user_id' })
+      .select()
       .single()
 
-    let result
-    if (existing) {
-      // 更新现有档案
-      const { data, error } = await supabaseAdmin
-        .from('user_health_profiles')
-        .update(profileData)
-        .eq('user_id', userId)
-        .select()
-        .single()
-
-      if (error) throw error
-      result = data
-    } else {
-      // 创建新档案
-      const { data, error } = await supabaseAdmin
-        .from('user_health_profiles')
-        .insert(profileData)
-        .select()
-        .single()
-
-      if (error) throw error
-      result = data
-    }
+    if (error) throw error
 
     return NextResponse.json({
       success: true,

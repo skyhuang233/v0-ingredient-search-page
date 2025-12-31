@@ -1,0 +1,15 @@
+faiss-cpu
+fastapi
+uvicorn
+pydantic
+numpy<2
+pandas
+torch
+torchvision
+transformers
+langchain
+langgraph
+langchain-core
+langchain-openai
+scikit-learn
+scipy

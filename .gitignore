@@ -25,3 +25,28 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# data and models
+data/
+archive/
+*.pt
+*.pth
+*.bin
+*.zip
+*.tar
+*.gz
+*.rar
+
+# editor
+.vscode/
+.idea/

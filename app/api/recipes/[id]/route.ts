@@ -3,12 +3,12 @@ import { NextRequest, NextResponse } from "next/server"
 const RECIPE_DETAIL_URL = process.env.RECIPE_DETAIL_URL ?? "http://localhost:8000/recipe"
 
 interface RouteContext {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
-    const { id } = context.params
+    const { id } = await context.params
     const response = await fetch(`${RECIPE_DETAIL_URL}/${id}`, { cache: "no-store" })
 
     if (!response.ok) {

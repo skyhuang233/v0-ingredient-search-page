@@ -36,13 +36,52 @@ class DenseRecommender:
         self.recipe_ids = np.load(emb_dir / "recipe_ids.npy")
         self.index = faiss.read_index(str(faiss_index_path))
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        self.model = AutoModel.from_pretrained(
-            model_path,
-            trust_remote_code=True,
-            dtype=getattr(torch, dtype) if hasattr(torch, dtype) else dtype,
-            device_map=device_map,
-        )
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, use_fast=False)
+        try:
+            self.model = AutoModel.from_pretrained(
+                model_path,
+                trust_remote_code=True,
+                torch_dtype=getattr(torch, dtype) if hasattr(torch, dtype) else dtype,
+                device_map=device_map,
+            )
+        except (ValueError, KeyError) as e:
+            # Fallback for "qwen3" invalid model type error
+            if "qwen3" in str(e).lower():
+                print(f"Warning: Met error '{e}'. Attempting to patch 'qwen3' to 'qwen2' for compatibility.")
+                import json
+                from transformers import AutoConfig
+                
+                # Load config manually
+                config_path = Path(model_path) / "config.json"
+                if config_path.exists():
+                    with open(config_path, "r", encoding="utf-8") as f:
+                        config_data = json.load(f)
+                    
+                    # Patch model type to 'gemma' which supports explicit head_dim
+                    config_data["model_type"] = "gemma"
+                    
+                    # Patch architecture
+                    if "architectures" in config_data:
+                        config_data["architectures"] = ["GemmaForCausalLM"]
+
+                    # Remove model_type from kwargs and other incompatible args
+                    if "model_type" in config_data:
+                         del config_data["model_type"]
+                    
+                    config = AutoConfig.for_model("gemma", **config_data)
+                    
+                    self.model = AutoModel.from_pretrained(
+                        model_path,
+                        config=config,
+                        trust_remote_code=True,
+                        torch_dtype=getattr(torch, dtype) if hasattr(torch, dtype) else dtype,
+                        device_map=device_map,
+                        ignore_mismatched_sizes=True,
+                    )
+                else:
+                    raise e
+            else:
+                raise e
         self.model.eval()
 
     def _embed_query(self, text: str) -> np.ndarray:
@@ -52,7 +91,12 @@ class DenseRecommender:
             outputs = self.model(**inputs)
             embedding = outputs.last_hidden_state[:, 0]
             embedding = torch.nn.functional.normalize(embedding, p=2, dim=1)
-        return embedding.cpu().numpy().astype(np.float32)
+            
+            # DEBUG: Check dtype
+            # print(f"DEBUG: Embedding dtype before cast: {embedding.dtype}")
+            embedding = embedding.float() # Cast to float32 immediately
+            
+        return embedding.detach().cpu().numpy()
 
     def recommend(
         self,
