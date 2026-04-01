@@ -1,5 +1,5 @@
 
-import OpenAI from "openai"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 
 import { HealthProfile } from "./health-calculator"
 
@@ -9,14 +9,9 @@ interface ExtendedHealthProfile extends HealthProfile {
     dietary_preferences?: string[]
 }
 
-// Initialize OpenAI Client (compatible with DeepSeek)
-// Use a dummy key if missing to prevent "Module not found" or init crashes on route load.
-// The actual call will fail gracefully in the try/catch block if the key is invalid.
-const apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || "dummy_key_for_init"
-const openai = new OpenAI({
-    apiKey: apiKey,
-    baseURL: "https://api.deepseek.com",
-})
+// Initialize Gemini Client
+const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || "dummy_key_for_init"
+const genAI = new GoogleGenerativeAI(apiKey)
 
 export interface RerankedResult {
     selected_recipe_ids: number[]
@@ -91,17 +86,19 @@ export async function rerankRecipes(
   `
 
     try {
-        const response = await openai.chat.completions.create({
-            model: "deepseek-chat", // DeepSeek model
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: `Candidates:\n${candidatesStr}` },
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.7,
-        })
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.5-flash",
+            systemInstruction: systemPrompt,
+            generationConfig: {
+                temperature: 0.7,
+                responseMimeType: "application/json",
+            }
+        });
 
-        const rawContent = response.choices[0].message.content
+        const prompt = `Candidates:\n${candidatesStr}`;
+        const response = await model.generateContent(prompt);
+        
+        const rawContent = response.response.text()
         if (!rawContent) throw new Error("No content from Agent")
 
         const result = JSON.parse(rawContent) as RerankedResult

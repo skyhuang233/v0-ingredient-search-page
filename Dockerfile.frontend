@@ -1,0 +1,30 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+# 启用 pnpm 工具
+RUN corepack enable pnpm
+
+# 设置 npm 国内加速镜像
+RUN pnpm config set registry https://registry.npmmirror.com
+
+# 拷贝依赖配置并确保使用精确版本安装
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
+
+# 拷贝项目源码
+COPY . .
+
+# 禁用默认的 telemetry 信息回传
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# 预构建生产环境产物
+RUN pnpm run build
+
+EXPOSE 3000
+
+# 绑定所有 IP 使得容器外可以访问
+ENV HOSTNAME="0.0.0.0"
+
+# 启动服务端
+CMD ["pnpm", "run", "start"]

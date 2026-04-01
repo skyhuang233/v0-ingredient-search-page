@@ -1,0 +1,65 @@
+# ==============================================================
+# NutriGenius Backend Dockerfile
+# 支持 GPU（默认）与 CPU 两种模式，通过构建参数切换：
+#   GPU: docker compose build  (默认)
+#   CPU: docker compose build --build-arg BUILD_TYPE=cpu
+# ==============================================================
+
+# 构建参数：gpu 或 cpu
+ARG BUILD_TYPE=gpu
+
+# ---- GPU 模式：使用 NVIDIA CUDA 基础镜像 ----
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04 AS base-gpu
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3.10-dev python3-pip curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf python3.10 /usr/bin/python3 \
+    && ln -sf python3 /usr/bin/python \
+    && ln -sf pip3 /usr/bin/pip
+
+# ---- CPU 模式：使用轻量 Python 镜像 ----
+FROM python:3.10-slim AS base-cpu
+
+# ---- 选择最终基础镜像 ----
+FROM base-${BUILD_TYPE} AS final
+
+WORKDIR /app
+
+# 设置 pip 国内镜像加速
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ \
+    && pip config set global.extra-index-url "https://pypi.tuna.tsinghua.edu.cn/simple/ https://pypi.mirrors.ustc.edu.cn/simple/" \
+    && pip config set global.timeout 600 \
+    && pip config set global.retries 5
+
+# ---- 安装 PyTorch（GPU/CPU 双模式） ----
+# GPU 模式：安装 CUDA 12.1 版本（支持运行时检测，约 2.5GB）
+# CPU 模式：安装轻量 CPU 版本（约 250MB）
+ARG BUILD_TYPE=gpu
+
+RUN if [ "$BUILD_TYPE" = "gpu" ]; then \
+        echo ">>> Installing PyTorch GPU (CUDA 12.1)..." && \
+        pip install --no-cache-dir \
+            torch==2.1.0+cu121 \
+            torchvision==0.16.0+cu121 \
+            --index-url https://download.pytorch.org/whl/cu121; \
+    else \
+        echo ">>> Installing PyTorch CPU-only..." && \
+        pip install --no-cache-dir \
+            torch==2.1.0+cpu \
+            torchvision==0.16.0+cpu \
+            --index-url https://download.pytorch.org/whl/cpu; \
+    fi
+
+# ---- 安装其余依赖（排除 torch 避免重复安装）----
+COPY requirements.txt .
+RUN grep -v -E "^torch$|^torchvision$" requirements.txt > requirements_notorch.txt \
+    && pip install --no-cache-dir -r requirements_notorch.txt
+
+# ---- 复制业务代码 ----
+COPY ./recommender ./recommender
+
+# FastAPI 端口
+EXPOSE 8000
+
+CMD ["uvicorn", "recommender.main:app", "--host", "0.0.0.0", "--port", "8000"]

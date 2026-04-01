@@ -4,8 +4,11 @@ import os
 from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import asyncio
+import json
 
 try:
     from dense_recommender import DenseRecommender
@@ -103,8 +106,6 @@ def create_app() -> FastAPI:
         if not chef_graph:
             raise HTTPException(status_code=503, detail="Agent service not available")
 
-        # Convert history
-        # Inject Context into System Prompt
         sys_prompt = SYSTEM_PROMPT
         if payload.context:
             recipe_name = payload.context.get("name", "Unknown Recipe")
@@ -118,48 +119,30 @@ def create_app() -> FastAPI:
             elif msg['role'] == 'assistant':
                 messages.append(AIMessage(content=msg['content']))
         
-        # Add current user input
-        # Note: In LangGraph, we typically pass the full state. 
-        # If payload.history already contains the latest user message, we are good.
-        # But our frontend "messages" usually includes the pending user message at the end.
-        
         if payload.images:
-            # Multimodal message construction
             content = [{"type": "text", "text": payload.message}]
             for img in payload.images:
-                content.append({
-                    "type": "image_url", 
-                    "image_url": {"url": img} # base64 or http url
-                })
+                content.append({"type": "image_url", "image_url": {"url": img}})
             messages.append(HumanMessage(content=content))
         else:
             messages.append(HumanMessage(content=payload.message))
 
         try:
-            # Invoke Graph
-            # The output of invoke is the final state. We want the last message from the agent.
             final_state = await chef_graph.ainvoke({"messages": messages})
-            
             last_message = final_state["messages"][-1]
             response_text = last_message.content
 
-            # CHECK FOR UI SIGNALS
-            # We look at recent messages. If the *last* turn included a Tool Call to 'ui_show_recipes', 
-            # we want to grab that tool's output.
-            
+            if isinstance(response_text, list):
+                response_text = "".join([part.get("text", "") for part in response_text if isinstance(part, dict) and "text" in part])
+            else:
+                response_text = str(response_text)
+
             ui_payload = None
             reversed_msgs = final_state["messages"][::-1]
-            
-            # Look for the ToolMessage corresponding to ui_show_recipes
             for msg in reversed_msgs:
-                # Stop if we hit a human message (start of this turn)
                 if isinstance(msg, HumanMessage):
                     break
-                    
                 if isinstance(msg, ToolMessage):
-                     # Check if this tool message is from our UI tool. 
-                     # We can iterate through the tool calls of the message *before* it to verify name, 
-                     # OR just check if the content looks like our JSON signal.
                      try:
                          data = json.loads(msg.content)
                          if isinstance(data, dict) and data.get("type") == "ui_component":
@@ -169,10 +152,70 @@ def create_app() -> FastAPI:
                          pass
 
             return AgentChatResponse(response=response_text, ui=ui_payload)
-            
         except Exception as e:
             print(f"Agent error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/agent/chat/stream")
+    async def agent_chat_stream(payload: AgentChatRequest):
+        if not chef_graph:
+            raise HTTPException(status_code=503, detail="Agent service not available")
+
+        sys_prompt = SYSTEM_PROMPT
+        if payload.context:
+            recipe_name = payload.context.get("name", "Unknown Recipe")
+            ingredients = ", ".join(payload.context.get("ingredients", []))
+            sys_prompt += f"\n\nCURRENT CONTEXT: The user is currently looking at the recipe '{recipe_name}'. Ingredients: {ingredients}. Help them specifically with this recipe."
+
+        messages = [SystemMessage(content=sys_prompt)]
+        for msg in payload.history:
+            if msg['role'] == 'user':
+                messages.append(HumanMessage(content=msg['content']))
+            elif msg['role'] == 'assistant':
+                messages.append(AIMessage(content=msg['content']))
+        
+        if payload.images:
+            content = [{"type": "text", "text": payload.message}]
+            for img in payload.images:
+                content.append({"type": "image_url", "image_url": {"url": img}})
+            messages.append(HumanMessage(content=content))
+        else:
+            messages.append(HumanMessage(content=payload.message))
+
+        async def event_generator():
+            try:
+                # Use astream_events to get real-time chunks and tool outputs
+                async for event in chef_graph.astream_events({"messages": messages}, version="v2"):
+                    kind = event["event"]
+                    
+                    if kind == "on_chat_model_stream":
+                        content = event["data"]["chunk"].content
+                        if isinstance(content, list):
+                            text = "".join([part.get("text", "") for part in content if isinstance(part, dict) and "text" in part])
+                        else:
+                            text = str(content)
+                        if text:
+                            yield f"data: {json.dumps({'type': 'text', 'content': text})}\n\n"
+                    
+                    elif kind == "on_tool_end":
+                        if event["name"] == "ui_show_recipes":
+                            try:
+                                raw_output = event["data"]["output"]
+                                # Output may be a ToolMessage object or a plain string
+                                raw_str = raw_output.content if hasattr(raw_output, "content") else str(raw_output)
+                                data = json.loads(raw_str)
+                                if isinstance(data, dict) and data.get("type") == "ui_component":
+                                    yield f"data: {json.dumps({'type': 'ui', 'content': data})}\n\n"
+                            except:
+                                pass
+                
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                print(f"Streaming error: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     return app
 

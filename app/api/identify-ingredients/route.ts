@@ -3,15 +3,19 @@ import { NextRequest, NextResponse } from "next/server"
 import { detectIngredientLabels, normalizeLabelsToIngredients } from "@/lib/vision"
 
 export const runtime = "nodejs"
-if (!process.env.GOOGLE_VISION_API_KEY) {
-  throw new Error("GOOGLE_VISION_API_KEY is not set in environment variables.")
-}
 
 /**
  * 处理 POST 请求，用于识别图片中的食材
  * API 路径: /api/identify-ingredients
  */
 export async function POST(req: NextRequest) {
+  // 在请求时检查，而非模块加载时检查（避免 Next.js build 阶段因缺少 key 而崩溃）
+  if (!process.env.GOOGLE_VISION_API_KEY) {
+    return NextResponse.json(
+      { error: "Image recognition is not configured (GOOGLE_VISION_API_KEY missing)." },
+      { status: 503 }
+    )
+  }
   try {
     const formData = await req.formData()
     const imageFile = formData.get("image") as File | null

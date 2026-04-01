@@ -1,0 +1,52 @@
+# Dependency directories
+node_modules/
+.pnpm-store
+
+# Next.js build output
+.next/
+out/
+build/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env/
+.venv/
+lib/
+lib64/
+
+# Data and Models
+data/
+models/
+datasets.zip
+*.zip
+archive/
+v0-ingredient-search-page/
+
+# Large Files
+*.pdf
+*.zip
+*.csv
+*.parquet
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Temporary files
+.DS_Store
+*.log

@@ -1,9 +1,10 @@
 faiss-cpu
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
 numpy<2
 pandas
+pyarrow
 torch
 torchvision
 transformers
@@ -11,5 +12,7 @@ langchain
 langgraph
 langchain-core
 langchain-openai
+langchain-google-genai
 scikit-learn
 scipy
+httpx

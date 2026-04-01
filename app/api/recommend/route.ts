@@ -29,8 +29,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Broad Retrieval (Stage 1)
-    // Ask the dense recommender for MORE candidates than we need (e.g., 20)
-    const broadSearchTopK = 20
+    // Ask the dense recommender for a smaller set of candidates to speed up reranking
+    const broadSearchTopK = 10
     const response = await fetch(RECOMMENDER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

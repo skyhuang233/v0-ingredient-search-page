@@ -92,14 +92,50 @@ export function ChatInterface({ context, className, minimal = false, initialMess
             })
 
             if (!res.ok) throw new Error("Failed to fetch")
+            if (!res.body) throw new Error("No response body")
 
-            const data = await res.json()
-            const assistantMsg: Message = {
-                role: "assistant",
-                content: data.content,
-                ui: data.ui
+            const reader = res.body.getReader()
+            const decoder = new TextDecoder()
+            
+            // Create a placeholder assistant message
+            let currentAssistantMsg: Message = { role: "assistant", content: "" }
+            setMessages(prev => [...prev, currentAssistantMsg])
+
+            let buffer = ""
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split("\n")
+                buffer = lines.pop() || "" // Keep last partial line
+
+                for (const line of lines) {
+                    const trimmed = line.trim()
+                    if (!trimmed || !trimmed.startsWith("data: ")) continue
+                    
+                    const dataStr = trimmed.slice(6)
+                    if (dataStr === "[DONE]") continue
+
+                    try {
+                        const data = JSON.parse(dataStr)
+                        if (data.type === "text") {
+                            currentAssistantMsg.content += data.content
+                        } else if (data.type === "ui") {
+                            currentAssistantMsg.ui = data.content
+                        }
+                        
+                        // Functional update to avoid closure staleness
+                        setMessages(prev => {
+                            const newMessages = [...prev]
+                            newMessages[newMessages.length - 1] = { ...currentAssistantMsg }
+                            return newMessages
+                        })
+                    } catch (e) {
+                        console.error("Streaming parse error:", e)
+                    }
+                }
             }
-            setMessages(prev => [...prev, assistantMsg])
         } catch (error) {
             console.error(error)
             setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I encountered an error. Please try again." }])

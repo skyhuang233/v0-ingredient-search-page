@@ -1,0 +1,72 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      args:
+        # 默认使用 GPU 模式（需要 NVIDIA 显卡 + NVIDIA Container Toolkit）
+        # 如果你的机器没有 GPU，请改为: BUILD_TYPE=cpu
+        BUILD_TYPE: gpu
+    container_name: ingredient_recommender_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # 挂载本地预处理数据和 FAISS 索引（用户需在部署前自行准备 data/ 目录）
+      - ./data:/app/data
+      # 挂载本地大模型目录到容器内部的 /models
+      # 用户需在 .env.local 中设置 MODEL_DIR=/path/to/your/models
+      - ${MODEL_DIR}:/models
+    environment:
+      - MODEL_PATH=/models/Qwen3-Embedding-0.6B
+      - PORT=8000
+    env_file:
+      # 注入 GOOGLE_API_KEY 等所有安全环境变量到 backend
+      - .env.local
+    # ========================================================
+    # GPU 加速配置（推荐开启，需要 NVIDIA Container Toolkit）
+    # 安装指南：https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+    # ========================================================
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # ========================================================
+    # 如果没有 GPU，请注释掉上方 deploy 块，并在 build.args 中改为 BUILD_TYPE=cpu
+    # ========================================================
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: ingredient_recommender_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # 在 Docker 专用隔离网络中，无法利用 localhost 进行相互调用。
+      # 因此配置 Next.js 使用 `backend` 容器名称来作为寻址域名。
+      # 注意：这里的 environment 配置优先级高于 env_file，不会被 .env.local 中的同名变量覆盖。
+      - RECOMMENDER_URL=http://backend:8000/recommend
+      - RECIPE_DETAIL_URL=http://backend:8000/recipe
+      - RECIPE_DETAIL_INTERNAL=http://backend:8000/recipe
+      - AGENT_URL=http://backend:8000/agent/chat
+    env_file:
+      # 用于读取如 API key 等所有的安全环境变量
+      - .env.local
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge

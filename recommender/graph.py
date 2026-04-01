@@ -7,7 +7,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # We will need the recommender instance. 
@@ -131,11 +131,10 @@ def create_chef_graph(recommender):
     
     # --- MODEL ---
     
-    api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    llm = ChatOpenAI(
-        model="deepseek-chat", # Or deepseek-vl-chat if supporting vision specifically via a different model name
-        api_key=api_key,
-        base_url="https://api.deepseek.com",
+    google_api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        google_api_key=google_api_key,
         temperature=0.7
     ).bind_tools(tools)
 

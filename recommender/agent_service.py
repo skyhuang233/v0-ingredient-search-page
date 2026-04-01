@@ -2,7 +2,7 @@ import os
 from typing import List, Optional
 
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
@@ -67,15 +67,14 @@ def create_agent_executor(recommender):
 
     tools = [search_recipes, get_recipe_details]
 
-    # Initialize LLM (DeepSeek via OpenAI compatible interface)
-    api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        print("WARNING: DEEPSEEK_API_KEY or OPENAI_API_KEY not found in environment.")
+    # Initialize LLM (Gemini)
+    google_api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not google_api_key:
+        print("WARNING: GOOGLE_API_KEY or GEMINI_API_KEY not found in environment.")
 
-    llm = ChatOpenAI(
-        model="deepseek-chat", 
-        api_key=api_key,
-        base_url="https://api.deepseek.com",
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash",
+        google_api_key=google_api_key,
         temperature=0.7
     )
 

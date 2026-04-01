@@ -18,19 +18,18 @@ export async function POST(req: Request) {
             content: m.content
         }));
 
-        // Forward to Python Service
-        // Ensure the Python service is running on port 8000
-        const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8000/agent/chat';
+        // Forward to Python Service (Streaming)
+        const AGENT_STREAM_URL = process.env.AGENT_URL 
+            ? process.env.AGENT_URL.replace('/agent/chat', '/agent/chat/stream')
+            : 'http://localhost:8000/agent/chat/stream';
 
-        const response = await fetch(AGENT_URL, {
+        const response = await fetch(AGENT_STREAM_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: latestMessage,
                 images: images,
-                context: context, // Forward context
+                context: context,
                 history: history,
             }),
         });
@@ -38,13 +37,17 @@ export async function POST(req: Request) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Agent Service Error:', errorText);
-            return NextResponse.json({ error: 'Failed to get response from agent' }, { status: response.status });
+            return NextResponse.json({ error: 'Failed to contact agent' }, { status: response.status });
         }
 
-        const data = await response.json();
-
-        // Return the assistant's message
-        return NextResponse.json({ role: 'assistant', content: data.response });
+        // Return the stream directly
+        return new Response(response.body, {
+            headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            },
+        });
 
     } catch (error) {
         console.error('Chat Proxy Error:', error);

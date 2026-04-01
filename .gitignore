@@ -50,3 +50,6 @@ archive/
 # editor
 .vscode/
 .idea/
+
+# Redundant clones
+v0-ingredient-search-page/
