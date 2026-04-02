@@ -16,3 +16,4 @@ langchain-google-genai
 scikit-learn
 scipy
 httpx
+accelerate>=1.1.0

@@ -1,6 +1,5 @@
 # ==============================================================
-# NutriGenius 一键部署脚本 (Windows PowerShell)
-# 使用方法：在项目根目录下执行 .\deploy.ps1
+# NutriGenius 一键部署脚本 (Windows PowerShell 兼容版)
 # ==============================================================
 
 $ErrorActionPreference = "Stop"
@@ -13,150 +12,131 @@ function Write-Fail { param($msg) Write-Host "  [FAIL] $msg" -ForegroundColor Re
 
 Write-Host ""
 Write-Host "===============================================" -ForegroundColor Magenta
-Write-Host "   NutriGenius 一键部署脚本 (Windows)        " -ForegroundColor Magenta
+Write-Host "   NutriGenius Deployment Script (Windows)     " -ForegroundColor Magenta
 Write-Host "===============================================" -ForegroundColor Magenta
 
 # ---- Step 1: 检查 Docker ----
-Write-Step "检查 Docker 运行状态..."
+Write-Step "Checking Docker Status..."
 try {
-    docker info *>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { Write-Fail "Docker 未运行，请先启动 Docker Desktop" }
-    Write-OK "Docker 正在运行"
+    & docker info *>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Fail "Docker is not running. Please start Docker Desktop." }
+    Write-OK "Docker is running."
 } catch {
-    Write-Fail "找不到 docker 命令，请先安装 Docker Desktop: https://www.docker.com/products/docker-desktop/"
+    Write-Fail "Docker command not found. Please install Docker Desktop."
 }
 
-# ---- Step 1b: 检查 NVIDIA GPU 支持 ----
-Write-Step "检查 NVIDIA GPU 支持..."
+# ---- Step 1b: 检查 GPU 支持 ----
+Write-Step "Checking NVIDIA GPU Support..."
 try {
-    $gpuCheck = docker run --rm --gpus all nvidia/cuda:12.1.1-base-ubuntu22.04 nvidia-smi 2>&1
+    $gpuCheck = & docker run --rm --gpus all nvidia/cuda:12.1.1-base-ubuntu22.04 nvidia-smi 2>&1
     if ($LASTEXITCODE -eq 0) {
-        Write-OK "NVIDIA GPU 可用，将使用 GPU 加速模式"
+        Write-OK "NVIDIA GPU detected. Using GPU acceleration."
     } else {
-        Write-Warn "GPU 检测失败（可能未安装 NVIDIA Container Toolkit）"
-        Write-Warn "  将继续使用 GPU 镜像，但推理可能回退到 CPU"
-        Write-Warn "  安装指南：https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html"
+        Write-Warn "GPU check failed. Will continue but may fallback to CPU."
+        Write-Warn "Install NVIDIA Container Toolkit for GPU support."
     }
 } catch {
-    Write-Warn "无法验证 GPU 可用性，继续部署（如无 GPU 请在 docker-compose.yml 中切换为 CPU 模式）"
+    Write-Warn "Could not verify GPU. Continuing..."
 }
 
 # ---- Step 2: 检查 .env.local ----
-Write-Step "检查 .env.local 配置文件..."
+Write-Step "Checking .env.local..."
 if (-not (Test-Path ".env.local")) {
-    Write-Warn ".env.local 不存在，正在从 .env.example 复制..."
+    Write-Warn ".env.local not found. Copying from .env.example..."
     Copy-Item ".env.example" ".env.local"
-    Write-Fail "已创建 .env.local，请先填入你的 API Key 和 MODEL_DIR，然后重新运行此脚本"
+    Write-Fail "Please fill in .env.local with your keys, then run again."
 }
-Write-OK ".env.local 存在"
+Write-OK ".env.local exists."
 
-# ---- Step 3: 解析并验证 .env.local ----
-Write-Step "解析环境变量..."
+# ---- Step 3: 解析 .env.local ----
+Write-Step "Parsing environment variables..."
 $envVars = @{}
 Get-Content ".env.local" | ForEach-Object {
-    $line = $_.Trim()
-    if ($line -and -not $line.StartsWith("#") -and $line -match "^([^=]+)=(.*)$") {
-        $envVars[$matches[1].Trim()] = $matches[2].Trim()
+    $trimmed = $_.Trim()
+    if ($trimmed -and -not $trimmed.StartsWith("#") -and $trimmed.Contains("=")) {
+        $parts = $trimmed.Split("=", 2)
+        if ($parts.Count -eq 2) {
+            $key = $parts[0].Trim()
+            $val = $parts[1].Trim()
+            $envVars[$key] = $val
+        }
     }
 }
 
-# 检查 MODEL_DIR
+# 验证 MODEL_DIR
 $modelDir = $envVars["MODEL_DIR"]
-if (-not $modelDir -or $modelDir -eq "/path/to/your/models/parent/directory") {
-    Write-Fail "请在 .env.local 中设置 MODEL_DIR（Qwen3 模型所在的父目录路径）`n  示例：MODEL_DIR=D:/models"
+if (-not $modelDir -or $modelDir -match "your/models/path") {
+    Write-Fail "Please set MODEL_DIR in .env.local (e.g., MODEL_DIR=D:/models)"
 }
 
-# 路径格式修正（Windows 路径转换）
+# 验证目录
 $modelDirLocal = $modelDir.Replace("/", "\")
 if (-not (Test-Path $modelDirLocal)) {
-    Write-Fail "MODEL_DIR 指定的目录不存在：$modelDirLocal`n  请确保模型文件已下载到该路径"
+    Write-Fail "MODEL_DIR directory does not exist: $modelDirLocal"
 }
 
 $modelPath = Join-Path $modelDirLocal "Qwen3-Embedding-0.6B"
 if (-not (Test-Path $modelPath)) {
-    Write-Warn "注意：在 $modelDirLocal 下未找到 Qwen3-Embedding-0.6B 子目录"
-    Write-Warn "  确保目录结构为：$modelDirLocal\Qwen3-Embedding-0.6B\"
-    $confirm = Read-Host "  是否仍然继续？(y/N)"
-    if ($confirm -ne "y" -and $confirm -ne "Y") { exit 1 }
+    Write-Warn "Qwen3-Embedding-0.6B not found in $modelDirLocal"
+    $confirm = Read-Host "Continue anyway? (y/N)"
+    if ($confirm -ne "y") { exit 1 }
 } else {
-    Write-OK "模型目录存在：$modelPath"
+    Write-OK "Model directory verified."
 }
 
-# 检查 GOOGLE_API_KEY
-$apiKey = $envVars["GOOGLE_API_KEY"]
-if (-not $apiKey -or $apiKey -eq "your_gemini_api_key_here") {
-    Write-Fail "请在 .env.local 中设置 GOOGLE_API_KEY（Gemini API Key）`n  申请地址：https://aistudio.google.com/app/apikey"
+# 验证 API Key
+if (-not $envVars["GOOGLE_API_KEY"] -or $envVars["GOOGLE_API_KEY"] -match "your_gemini_api_key") {
+    Write-Fail "GOOGLE_API_KEY is missing in .env.local"
 }
-Write-OK "GOOGLE_API_KEY 已配置"
+Write-OK "API Keys verified."
 
-# 检查 Supabase
-$supabaseUrl = $envVars["NEXT_PUBLIC_SUPABASE_URL"]
-if (-not $supabaseUrl -or $supabaseUrl -eq "https://your-project-id.supabase.co") {
-    Write-Warn "NEXT_PUBLIC_SUPABASE_URL 未配置，部分收藏/历史功能可能不可用"
-} else {
-    Write-OK "Supabase 已配置"
-}
-
-# ---- Step 4: 检查数据目录 ----
-Write-Step "检查预处理数据目录..."
-$requiredFiles = @(
+# ---- Step 4: 检查 Data ----
+Write-Step "Checking Data Files..."
+$missing = @()
+@(
     "data\embeddings_0p6b\faiss_index.bin",
-    "data\embeddings_0p6b\recipe_ids.npy",
     "data\processed\recipes_clean.parquet"
-)
-$missingFiles = @()
-foreach ($f in $requiredFiles) {
-    if (-not (Test-Path $f)) { $missingFiles += $f }
+) | ForEach-Object {
+    if (-not (Test-Path $_)) { $missing += $_ }
 }
-if ($missingFiles.Count -gt 0) {
-    Write-Fail "以下数据文件缺失，请联系项目维护者获取并放置到对应路径：`n  $($missingFiles -join "`n  ")"
+if ($missing.Count -gt 0) {
+    Write-Fail "Missing data files: $($missing -join ', ')"
 }
-Write-OK "所有必要数据文件存在"
+Write-OK "Data files verified."
 
-# ---- Step 5: 设置环境变量供 compose 使用 ----
+# ---- Step 5: 启动服务 ----
+Write-Step "Starting Docker Services (This may take a while)..."
 $env:MODEL_DIR = $modelDir
-
-# ---- Step 6: 构建并启动服务 ----
-Write-Step "构建并启动 Docker 服务（首次构建 GPU 模式约需 20-40 分钟，含下载 CUDA 基础镜像 + PyTorch）..."
-docker compose up --build -d
+& docker compose up --build -d
 if ($LASTEXITCODE -ne 0) {
-    Write-Fail "docker compose up 失败，请查看上方日志"
+    Write-Fail "docker compose up failed."
 }
-Write-OK "容器已启动，正在等待后端初始化..."
+Write-OK "Containers started. Waiting for initialization..."
 
-# ---- Step 7: 等待 backend 健康检查 ----
-Write-Step "等待后端服务就绪（模型加载可能需要 2-5 分钟）..."
-$maxRetries = 30
-$retryInterval = 10
-$retries = 0
-while ($retries -lt $maxRetries) {
-    Start-Sleep -Seconds $retryInterval
-    $retries++
+# ---- Step 6: 健康检查 ----
+Write-Step "Waiting for backend health check (2-5 mins)..."
+$ready = $false
+for ($i=1; $i -le 30; $i++) {
     try {
-        $response = Invoke-WebRequest -Uri "http://localhost:8000/health" -TimeoutSec 5 -UseBasicParsing 2>$null
-        if ($response.StatusCode -eq 200) {
-            Write-OK "后端服务已就绪！"
+        $resp = Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 5 2>$null
+        if ($resp.StatusCode -eq 200) {
+            $ready = $true
             break
         }
-    } catch {
-        Write-Host "  等待中... ($retries/$maxRetries)" -ForegroundColor DarkGray
-    }
-    if ($retries -ge $maxRetries) {
-        Write-Warn "后端超时未响应，请运行 'docker compose logs backend' 查看日志"
-    }
+    } catch { }
+    Write-Host "." -NoNewline
+    Start-Sleep -Seconds 10
 }
 
-# ---- 完成 ----
+if ($ready) {
+    Write-OK "`nBackend is READY!"
+} else {
+    Write-Warn "`nBackend timeout. Check 'docker compose logs backend'."
+}
+
 Write-Host ""
 Write-Host "===============================================" -ForegroundColor Green
-Write-Host "   部署完成！                                 " -ForegroundColor Green
+Write-Host "   Deployment Complete!                        " -ForegroundColor Green
 Write-Host "===============================================" -ForegroundColor Green
-Write-Host ""
-Write-Host "  前端访问地址：" -NoNewline; Write-Host "http://localhost:3000" -ForegroundColor Cyan
-Write-Host "  后端 API 地址：" -NoNewline; Write-Host "http://localhost:8000" -ForegroundColor Cyan
-Write-Host "  健康检查：    " -NoNewline; Write-Host "http://localhost:8000/health" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  停止服务：    docker compose down"
-Write-Host "  查看日志：    docker compose logs -f"
-Write-Host "  重新部署：    .\deploy.ps1"
+Write-Host "  URL: http://localhost:3000"
 Write-Host ""

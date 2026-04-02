@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      extra_hosts:
+        - "host.docker.internal:host-gateway"  # 允许构建阶段解析宿主机地址
       args:
         # 默认使用 GPU 模式（需要 NVIDIA 显卡 + NVIDIA Container Toolkit）
         # 如果你的机器没有 GPU，请改为: BUILD_TYPE=cpu

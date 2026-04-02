@@ -1,12 +1,8 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ChatWindow } from '@/components/chat-window'
 import { ChatProvider } from "@/components/chat-context"
 import './globals.css'
-
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: 'NutriGenius',
@@ -21,11 +17,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      {/* 直接使用系统默认字体栈，不再尝试联网下载 */}
+      <body className="antialiased font-sans">
         <ChatProvider>
           {children}
           <ChatWindow />
         </ChatProvider>
+        <Analytics />
       </body>
     </html>
   )
