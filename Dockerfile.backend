@@ -11,6 +11,10 @@ ARG BUILD_TYPE=gpu
 # ---- GPU 模式：使用 NVIDIA CUDA 基础镜像 ----
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04 AS base-gpu
 
+# 插入以下代码以更换软件源 (以 Ubuntu 22.04 为例)
+RUN sed -i 's@//.*archive.ubuntu.com@//mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list && \
+    sed -i 's@//.*security.ubuntu.com@//mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3.10-dev python3-pip curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -40,8 +44,10 @@ ARG BUILD_TYPE=gpu
 RUN if [ "$BUILD_TYPE" = "gpu" ]; then \
         echo ">>> Installing PyTorch GPU (CUDA 12.1)..." && \
         pip install --no-cache-dir \
-            torch==2.1.0+cu121 \
-            torchvision==0.16.0+cu121 \
+            --index-url https://download.pytorch.org/whl/cu121 \
+            --trusted-host download.pytorch.org \
+            torch==2.5.1+cu121 \
+            torchvision==0.20.1+cu121 \
             --index-url https://download.pytorch.org/whl/cu121; \
     else \
         echo ">>> Installing PyTorch CPU-only..." && \

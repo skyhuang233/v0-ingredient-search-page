@@ -20,7 +20,6 @@ yarn-error.log*
 .env*
 !.env.example
 
-
 # vercel
 .vercel
 
@@ -54,4 +53,4 @@ archive/
 .idea/
 
 # Redundant clones
-v0-ingredient-search-page/
+v0-ingredient-search-page/
